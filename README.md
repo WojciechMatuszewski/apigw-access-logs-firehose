@@ -55,3 +55,31 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
   - Sadly, **the `AppendDelimiterToRecord`** is **only available when _dynamic partitioning_ is turned on!**.
 
   - The `@aws-cdk/aws-kinesisfirehose-alpha` package does not expose the _dynamic partitioning_ options.
+
+- By **using _dynamic partitioning_** you **loose the ability to use the build-in variables like `!{timestamp:XXX}` and others**.
+
+  - You have to provide them by yourself. You can either do that **within the processor Lambda** or **inline using `jq`**.
+
+  - Remember that **you pay additional fee for using the _dynamic partitioning_** feature.
+
+  - What is interesting that **the rule does not apply to `ErrorOutputPrefix` property**.
+    > You cannot use partitionKeyFromLambda and partitionKeyFromQuery namespaces when creating ErrorOutputPrefix expressions.
+
+- The **_dynamic partitioning_ feature is great!**, but I feel like using it only for the newline case is quite a big overhead.
+
+- If you want to use _API Gateway API Keys_ you **have to associate the API Key with an usage plan**.
+
+  - If you do not, the _API Gateway_ will reject the request.
+
+    > API Key ... not authorized because method 'GET /' requires API Key and API Key is not associated with a Usage Plan for API Stage zsuvlqr7nb/prod: No Usage Plan found for key and API Stage
+
+  - The **access logs** are **produced before the execution logs**. Makes sense
+
+- _API Gateway_ has weird _IAM actions_ scheme.
+
+  - To retrieve information about an API Key, the `apigateway:GET` action is used on the API Key resource, weird.
+
+  - Refer to [this question](https://repost.aws/questions/QUbbuJnHDORfKRjquIsCWfug/api-gateway-iam-actions-permissions-definition).
+
+- TODO: It seems like using `Lazy` is not a good way to deal with circular references.
+  - What is the use-case for `Lazy` then?

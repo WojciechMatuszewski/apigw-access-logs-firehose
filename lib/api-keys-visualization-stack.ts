@@ -1,17 +1,17 @@
+import * as aws_lambda_go from "@aws-cdk/aws-lambda-go-alpha";
 import {
+  Aws,
   aws_apigateway,
+  aws_iam,
+  aws_kinesisfirehose,
   aws_lambda,
   aws_logs,
   aws_s3,
-  Duration,
+  Lazy,
   RemovalPolicy,
   Stack,
-  StackProps,
-  aws_kinesisfirehose as aws_kinesisfirehose_vanilla
+  StackProps
 } from "aws-cdk-lib";
-import * as aws_kinesisfirehose from "@aws-cdk/aws-kinesisfirehose-alpha";
-import * as aws_kinesisfirehose_destinations from "@aws-cdk/aws-kinesisfirehose-destinations-alpha";
-import * as aws_lambda_go from "@aws-cdk/aws-lambda-go-alpha";
 import { Construct } from "constructs";
 import { join } from "path";
 
@@ -26,34 +26,6 @@ export class ApiKeysVisualizationStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY
     });
 
-    // const kinesisAPILogsDeliveryStream =
-    //   new aws_kinesisfirehose.CfnDeliveryStream(
-    //     this,
-    //     "KinesisAPILogsDeliveryStream",
-    //     {
-    //       s3DestinationConfiguration: {
-    //         bucketArn: APILogsBucket.bucketArn,
-    //         roleArn: ""
-    //       },
-    //       extendedS3DestinationConfiguration: {
-    //         dataFormatConversionConfiguration: {},
-    //         processingConfiguration: {
-    //           processors: [
-    //             {
-    //               type: "AppendDelimiterToRecord",
-    //               parameters: [
-    //                 { parameterName: "Delimiter", parameterValue: "\\n" }
-    //               ]
-    //             }
-    //           ]
-    //         },
-    //         dynamicPartitioningConfiguration: {
-    //           enabled: true
-    //         }
-    //       }
-    //     }
-    //   );
-
     const APILogsProcessor = new aws_lambda_go.GoFunction(
       this,
       "APILogsProcessor",
@@ -63,47 +35,103 @@ export class ApiKeysVisualizationStack extends Stack {
       }
     );
 
-    const kinesisAPILogsDeliveryStream = new aws_kinesisfirehose.DeliveryStream(
+    // let firstAPIKeyArnValue: string | undefined;
+    // const lazyFirstAPIKeyResourceValue = Lazy.string({
+    //   produce: () => firstAPIKeyArnValue
+    // });
+
+    // let secondAPIKeyArnValue: string | undefined;
+    // const lazySecondAPIKeyResourceValue = Lazy.string({
+    //   produce: () => secondAPIKeyArnValue
+    // });
+
+    APILogsProcessor.addToRolePolicy(
+      new aws_iam.PolicyStatement({
+        effect: aws_iam.Effect.ALLOW,
+        actions: ["apigateway:GET"],
+        resources: [`arn:${Aws.PARTITION}:apigateway:${Aws.REGION}::/apikeys/*`]
+      })
+    );
+
+    const firehoseAPIDeliveryStreamLogGroup = new aws_logs.LogGroup(
       this,
-      "kinesisAPILogsDeliveryStream",
+      "KinesisAPIDeliveryStreamLogGroup",
+      {}
+    );
+
+    const firehoseAPIDeliveryStreamLogStream = new aws_logs.LogStream(
+      this,
+      "KinesisAPIDeliveryStreamLogStream",
       {
-        deliveryStreamName: "amazon-apigateway-access-logs",
-        destinations: [
-          new aws_kinesisfirehose_destinations.S3Bucket(APILogsBucket, {
-            logging: true,
-            /**
-             * The `!{...}` expressions are evaluated by Firehose @delivery-time.
-             */
-            dataOutputPrefix:
-              "logs/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/",
+        logGroup: firehoseAPIDeliveryStreamLogGroup,
+        logStreamName: "firehose-api-delivery-stream"
+      }
+    );
+
+    const firehoseAPIDeliveryStreamRole = new aws_iam.Role(
+      this,
+      "KinesisAPIDeliveryStreamRole",
+      {
+        assumedBy: new aws_iam.ServicePrincipal("firehose.amazonaws.com")
+      }
+    );
+
+    firehoseAPIDeliveryStreamLogGroup.grantWrite(firehoseAPIDeliveryStreamRole);
+    APILogsBucket.grantReadWrite(firehoseAPIDeliveryStreamRole);
+    APILogsProcessor.grantInvoke(firehoseAPIDeliveryStreamRole);
+
+    const firehoseAPILogsDeliveryStream =
+      new aws_kinesisfirehose.CfnDeliveryStream(
+        this,
+        "KinesisAPILogsDeliveryStream",
+        {
+          deliveryStreamName: "amazon-apigateway-logs-delivery-stream",
+          extendedS3DestinationConfiguration: {
+            bucketArn: APILogsBucket.bucketArn,
+            cloudWatchLoggingOptions: {
+              enabled: true,
+              logGroupName: firehoseAPIDeliveryStreamLogGroup.logGroupName,
+              logStreamName: firehoseAPIDeliveryStreamLogStream.logStreamName
+            },
+            roleArn: firehoseAPIDeliveryStreamRole.roleArn,
+            prefix:
+              "logs/year=!{partitionKeyFromLambda:year}/month=!{partitionKeyFromLambda:month}/day=!{partitionKeyFromLambda:day}/hour=!{partitionKeyFromLambda:hour}/",
             errorOutputPrefix:
               "errors/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/",
-            bufferingInterval: Duration.seconds(60),
-            processor: new aws_kinesisfirehose.LambdaFunctionProcessor(
-              APILogsProcessor
-            )
-          })
-        ]
-      }
-    );
-
-    const cfnKinesisAPILogsDeliveryStream = kinesisAPILogsDeliveryStream.node
-      .defaultChild as aws_kinesisfirehose_vanilla.CfnDeliveryStream;
-
-    cfnKinesisAPILogsDeliveryStream.addPropertyOverride(
-      "ExtendedS3DestinationConfiguration.ProcessingConfiguration.Processors.1",
-      {
-        Type: "AppendDelimiterToRecord",
-        Parameters: [
-          {
-            ParameterName: "Delimiter",
-            ParameterValue: "\\n"
+            processingConfiguration: {
+              enabled: true,
+              processors: [
+                {
+                  type: "Lambda",
+                  parameters: [
+                    {
+                      parameterName: "LambdaArn",
+                      parameterValue: APILogsProcessor.functionArn
+                    }
+                  ]
+                },
+                {
+                  type: "AppendDelimiterToRecord",
+                  parameters: [
+                    { parameterName: "Delimiter", parameterValue: "\\n" }
+                  ]
+                }
+              ]
+            },
+            dynamicPartitioningConfiguration: {
+              enabled: true
+            },
+            bufferingHints: {
+              intervalInSeconds: 60
+            }
           }
-        ]
-      }
-    );
+        }
+      );
 
     const api = new aws_apigateway.RestApi(this, "api", {
+      defaultMethodOptions: {
+        apiKeyRequired: true
+      },
       defaultCorsPreflightOptions: {
         allowOrigins: ["*"],
         allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -115,10 +143,22 @@ export class ApiKeysVisualizationStack extends Stack {
         ),
         loggingLevel: aws_apigateway.MethodLoggingLevel.INFO,
         accessLogDestination: new FirehoseAccessLogsDestination(
-          kinesisAPILogsDeliveryStream
+          firehoseAPILogsDeliveryStream
         )
       }
     });
+
+    const firstAPIKey = api.addApiKey("FirstApiKey", {
+      apiKeyName: "FirstApiKey",
+      description: "First API Key"
+    });
+    // firstAPIKeyArnValue = firstAPIKey.keyArn;
+
+    const secondAPIKey = api.addApiKey("SecondApiKey", {
+      apiKeyName: "SecondApiKey",
+      description: "Second API Key"
+    });
+    // secondAPIKeyArnValue = secondAPIKey.keyArn;
 
     const helloIntegration = new aws_apigateway.MockIntegration({
       passthroughBehavior: aws_apigateway.PassthroughBehavior.NEVER,
@@ -168,12 +208,12 @@ class FirehoseAccessLogsDestination
   implements aws_apigateway.IAccessLogDestination
 {
   constructor(
-    private readonly deliveryStream: aws_kinesisfirehose.DeliveryStream
+    private readonly deliveryStream: aws_kinesisfirehose.CfnDeliveryStream
   ) {}
 
   public bind(
     stage: aws_apigateway.IStage
   ): aws_apigateway.AccessLogDestinationConfig {
-    return { destinationArn: this.deliveryStream.deliveryStreamArn };
+    return { destinationArn: this.deliveryStream.attrArn };
   }
 }
