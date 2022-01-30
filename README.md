@@ -82,4 +82,7 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
   - Refer to [this question](https://repost.aws/questions/QUbbuJnHDORfKRjquIsCWfug/api-gateway-iam-actions-permissions-definition).
 
 - TODO: It seems like using `Lazy` is not a good way to deal with circular references.
+
   - What is the use-case for `Lazy` then?
+
+- TODO: Why do we need to partition the data. Is it for Glue or Athena?
