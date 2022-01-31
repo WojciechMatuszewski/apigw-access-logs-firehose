@@ -73,7 +73,9 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
     > API Key ... not authorized because method 'GET /' requires API Key and API Key is not associated with a Usage Plan for API Stage zsuvlqr7nb/prod: No Usage Plan found for key and API Stage
 
-  - The **access logs** are **produced before the execution logs**. Makes sense
+  - The **_usage plan_ has to be associated with API stage**. Otherwise, _API Gateway_ will reject the request (the same error as above).
+
+- The **access logs** are **produced before the execution logs**. Makes sense.
 
 - _API Gateway_ has weird _IAM actions_ scheme.
 
@@ -81,8 +83,27 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
   - Refer to [this question](https://repost.aws/questions/QUbbuJnHDORfKRjquIsCWfug/api-gateway-iam-actions-permissions-definition).
 
-- TODO: It seems like using `Lazy` is not a good way to deal with circular references.
+- The `Lazy` exported from _AWS CDK_ is not for circular reference resolution.
 
-  - What is the use-case for `Lazy` then?
+  - The only reliable way to resolve circular references is to **split resources that cause the circular reference**.
+
+- We went through all that _Firehose_ partitioning problems so that, when we query the data using _Athena_, the query is fast and cost efficient.
+
+  - If we did not, _Athena_ would be forced to scan **all of our objects in the bucket**. Not ideal.
+
+  - If you do not partition, you might also have problems with throttling on _S3_ level. [Refer to this documentation page](https://docs.aws.amazon.com/athena/latest/ug/partitions.html#partitions-considerations-limitations).
+
+    > If you issue queries against Amazon S3 buckets with a large number of objects and the data is not partitioned, such queries may affect the GET request rate limits in Amazon S3 and lead to Amazon S3 exceptions.
+
+- _Athena_ needs a _table_ to run the queries. To **create a table, you can either do it manually via _Athena_ SDL, _Glue_ or using _Glue_ crawler**.
+
+  - Using the crawler is pretty nice as it also detects the partitions for you!
+
+- The example for the [`AWS::Glue::Crawler` resource](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-glue-crawler.html) is not valid. The **`name` property on the `AWS::Glue::Database.DatabaseInput` cannot contain uppercase characters**.
+
+- TODO: `arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole` in `Policies` tab in _IAM_.
+
+  - WTF?
+  - Is this policy related to service-linked roles?
 
 - TODO: Why do we need to partition the data. Is it for Glue or Athena?

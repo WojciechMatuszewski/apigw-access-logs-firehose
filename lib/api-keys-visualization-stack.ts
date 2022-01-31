@@ -2,6 +2,7 @@ import * as aws_lambda_go from "@aws-cdk/aws-lambda-go-alpha";
 import {
   Aws,
   aws_apigateway,
+  aws_glue,
   aws_iam,
   aws_kinesisfirehose,
   aws_lambda,
@@ -35,21 +36,19 @@ export class ApiKeysVisualizationStack extends Stack {
       }
     );
 
-    // let firstAPIKeyArnValue: string | undefined;
-    // const lazyFirstAPIKeyResourceValue = Lazy.string({
-    //   produce: () => firstAPIKeyArnValue
-    // });
-
-    // let secondAPIKeyArnValue: string | undefined;
-    // const lazySecondAPIKeyResourceValue = Lazy.string({
-    //   produce: () => secondAPIKeyArnValue
-    // });
+    /**
+     * Using `api.addApiKey` would cause a circular reference in CloudFormation.
+     * Thankfully, the `ApiKey` resource is a standalone resource.
+     */
+    const firstAPIKey = new aws_apigateway.ApiKey(this, "FirstAPIKey", {});
+    const secondAPIKey = new aws_apigateway.ApiKey(this, "SecondAPIKey", {});
 
     APILogsProcessor.addToRolePolicy(
       new aws_iam.PolicyStatement({
         effect: aws_iam.Effect.ALLOW,
         actions: ["apigateway:GET"],
-        resources: [`arn:${Aws.PARTITION}:apigateway:${Aws.REGION}::/apikeys/*`]
+        // resources: [`arn:${Aws.PARTITION}:apigateway:${Aws.REGION}::/apikeys/*`]
+        resources: [firstAPIKey.keyArn, secondAPIKey.keyArn]
       })
     );
 
@@ -148,17 +147,17 @@ export class ApiKeysVisualizationStack extends Stack {
       }
     });
 
-    const firstAPIKey = api.addApiKey("FirstApiKey", {
-      apiKeyName: "FirstApiKey",
-      description: "First API Key"
+    const APIUsagePlan = api.addUsagePlan("APIUsagePlan", {
+      name: "ForAPIKeys",
+      apiStages: [
+        {
+          api,
+          stage: api.deploymentStage
+        }
+      ]
     });
-    // firstAPIKeyArnValue = firstAPIKey.keyArn;
-
-    const secondAPIKey = api.addApiKey("SecondApiKey", {
-      apiKeyName: "SecondApiKey",
-      description: "Second API Key"
-    });
-    // secondAPIKeyArnValue = secondAPIKey.keyArn;
+    APIUsagePlan.addApiKey(firstAPIKey);
+    APIUsagePlan.addApiKey(secondAPIKey);
 
     const helloIntegration = new aws_apigateway.MockIntegration({
       passthroughBehavior: aws_apigateway.PassthroughBehavior.NEVER,
@@ -192,6 +191,51 @@ export class ApiKeysVisualizationStack extends Stack {
           }
         }
       ]
+    });
+
+    const glueDatabase = new aws_glue.CfnDatabase(this, "GlueDatabase", {
+      catalogId: Aws.ACCOUNT_ID,
+      databaseInput: {
+        name: "apilogscrawlerdb"
+      }
+    });
+
+    /**
+     * https://docs.aws.amazon.com/glue/latest/dg/create-an-iam-role.html
+     */
+    const crawlerRole = new aws_iam.Role(this, "GlueCrawlerRole", {
+      assumedBy: new aws_iam.ServicePrincipal("glue.amazonaws.com"),
+      managedPolicies: [
+        aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
+          "service-role/AWSGlueServiceRole"
+        )
+      ],
+      inlinePolicies: {
+        allowAPILogsBucketAccess: new aws_iam.PolicyDocument({
+          statements: [
+            new aws_iam.PolicyStatement({
+              effect: aws_iam.Effect.ALLOW,
+              actions: ["s3:*"],
+              resources: [
+                APILogsBucket.bucketArn,
+                APILogsBucket.arnForObjects("*")
+              ]
+            })
+          ]
+        })
+      }
+    });
+
+    const glueCrawler = new aws_glue.CfnCrawler(this, "GlueCrawler", {
+      role: crawlerRole.roleArn,
+      targets: {
+        s3Targets: [
+          {
+            path: `${APILogsBucket.bucketName}/logs/`
+          }
+        ]
+      },
+      databaseName: glueDatabase.ref
     });
   }
 
