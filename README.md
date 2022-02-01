@@ -101,6 +101,16 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
 - The example for the [`AWS::Glue::Crawler` resource](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-glue-crawler.html) is not valid. The **`name` property on the `AWS::Glue::Database.DatabaseInput` cannot contain uppercase characters**.
 
+- Before you run any kind of _Athena_ queries, you have to set the location where _Athena_ will store the query output and metadata. [Documentation link](https://docs.aws.amazon.com/athena/latest/ug/querying.html).
+
+  - This setting is set **on the workgroup level**.
+
+  - Workgroup is **a way to control query access and costs**. [Documentation link](https://docs.aws.amazon.com/athena/latest/ug/manage-queries-control-costs-with-workgroups.html).
+
+  - The "primary" (default) workgroup is already created for you. I could not find a way to update it via IaC. Had to create my own separate workgroup.
+
+- It seems to me that _Athena_ uses some kind of [_service-linked role_](https://docs.aws.amazon.com/IAM/latest/UserGuide/using-service-linked-roles.html) to save the query results onto _S3_.
+
 - TODO: `arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole` in `Policies` tab in _IAM_.
 
   - WTF?

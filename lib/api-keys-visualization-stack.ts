@@ -2,12 +2,16 @@ import * as aws_lambda_go from "@aws-cdk/aws-lambda-go-alpha";
 import {
   Aws,
   aws_apigateway,
+  aws_athena,
   aws_glue,
   aws_iam,
   aws_kinesisfirehose,
   aws_lambda,
   aws_logs,
   aws_s3,
+  CustomResource,
+  custom_resources,
+  Duration,
   Lazy,
   RemovalPolicy,
   Stack,
@@ -27,11 +31,11 @@ export class ApiKeysVisualizationStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY
     });
 
-    const APILogsProcessor = new aws_lambda_go.GoFunction(
+    const APILogsEnricher = new aws_lambda_go.GoFunction(
       this,
       "APILogsProcessor",
       {
-        entry: join(__dirname, "../src"),
+        entry: join(__dirname, "../src/firehose-enricher"),
         runtime: aws_lambda.Runtime.PROVIDED_AL2
       }
     );
@@ -43,19 +47,17 @@ export class ApiKeysVisualizationStack extends Stack {
     const firstAPIKey = new aws_apigateway.ApiKey(this, "FirstAPIKey", {});
     const secondAPIKey = new aws_apigateway.ApiKey(this, "SecondAPIKey", {});
 
-    APILogsProcessor.addToRolePolicy(
+    APILogsEnricher.addToRolePolicy(
       new aws_iam.PolicyStatement({
         effect: aws_iam.Effect.ALLOW,
         actions: ["apigateway:GET"],
-        // resources: [`arn:${Aws.PARTITION}:apigateway:${Aws.REGION}::/apikeys/*`]
         resources: [firstAPIKey.keyArn, secondAPIKey.keyArn]
       })
     );
 
     const firehoseAPIDeliveryStreamLogGroup = new aws_logs.LogGroup(
       this,
-      "KinesisAPIDeliveryStreamLogGroup",
-      {}
+      "KinesisAPIDeliveryStreamLogGroup"
     );
 
     const firehoseAPIDeliveryStreamLogStream = new aws_logs.LogStream(
@@ -77,7 +79,7 @@ export class ApiKeysVisualizationStack extends Stack {
 
     firehoseAPIDeliveryStreamLogGroup.grantWrite(firehoseAPIDeliveryStreamRole);
     APILogsBucket.grantReadWrite(firehoseAPIDeliveryStreamRole);
-    APILogsProcessor.grantInvoke(firehoseAPIDeliveryStreamRole);
+    APILogsEnricher.grantInvoke(firehoseAPIDeliveryStreamRole);
 
     const firehoseAPILogsDeliveryStream =
       new aws_kinesisfirehose.CfnDeliveryStream(
@@ -105,7 +107,7 @@ export class ApiKeysVisualizationStack extends Stack {
                   parameters: [
                     {
                       parameterName: "LambdaArn",
-                      parameterValue: APILogsProcessor.functionArn
+                      parameterValue: APILogsEnricher.functionArn
                     }
                   ]
                 },
@@ -180,7 +182,7 @@ export class ApiKeysVisualizationStack extends Stack {
       ]
     });
 
-    const helloMethod = api.root.addMethod("GET", helloIntegration, {
+    api.root.addMethod("GET", helloIntegration, {
       methodResponses: [
         {
           statusCode: "200",
@@ -236,6 +238,78 @@ export class ApiKeysVisualizationStack extends Stack {
         ]
       },
       databaseName: glueDatabase.ref
+    });
+
+    /**
+     * To run the crawler when the stack is deployed.
+     * Otherwise you would have to go to the console and run it manually.
+     */
+
+    const crawlerStarter = new aws_lambda_go.GoFunction(
+      this,
+      "CrawlerStarter",
+      {
+        entry: join(__dirname, "../src/crawler-starter")
+      }
+    );
+
+    const crawlerStatusChecker = new aws_lambda_go.GoFunction(
+      this,
+      "CrawlerStatusChecker",
+      {
+        entry: join(__dirname, "../src/crawler-status-checker")
+      }
+    );
+
+    const crawlerStarterProvider = new custom_resources.Provider(
+      this,
+      "CrawlerStarterProvider",
+      {
+        onEventHandler: crawlerStarter,
+        isCompleteHandler: crawlerStatusChecker,
+        queryInterval: Duration.seconds(15),
+        totalTimeout: Duration.minutes(5)
+      }
+    );
+
+    const crawlerStarterResource = new CustomResource(
+      this,
+      "CrawlerStarterCustomResource",
+      {
+        serviceToken: crawlerStarterProvider.serviceToken,
+        resourceType: "Custom::CrawlerStarter",
+        properties: {
+          crawlerName: glueCrawler.ref
+        }
+      }
+    );
+
+    const athenaAPILogsWorkGroup = new aws_athena.CfnWorkGroup(
+      this,
+      "AthenaAPILogsWorkGroup",
+      {
+        name: "apilogsworkgroup",
+        state: "ENABLED",
+        workGroupConfiguration: {
+          resultConfiguration: {
+            outputLocation: `${APILogsBucket.s3UrlForObject("athena/")}`
+          },
+          publishCloudWatchMetricsEnabled: false,
+          enforceWorkGroupConfiguration: true,
+          requesterPaysEnabled: false
+        }
+      }
+    );
+
+    /**
+     * https://stackoverflow.com/a/13359330
+     */
+    const currentDay = new Date().getDate();
+    new aws_athena.CfnNamedQuery(this, "AthenaIaCQuery", {
+      name: "apilogsquery",
+      database: glueDatabase.ref,
+      queryString: `SELECT * from ${glueCrawler.ref} WHERE day=${currentDay}`,
+      workGroup: athenaAPILogsWorkGroup.name
     });
   }
 
