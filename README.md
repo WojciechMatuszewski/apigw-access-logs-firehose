@@ -111,6 +111,22 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
 - It seems to me that _Athena_ uses some kind of [_service-linked role_](https://docs.aws.amazon.com/IAM/latest/UserGuide/using-service-linked-roles.html) to save the query results onto _S3_.
 
+- The _custom resources_ framework that _AWS CDK_ exposes is great!
+
+  - The `isCompleteHandler` property and the whole concept of _waiters_ is very useful, especially for asynchronous jobs.
+
+- Initially I though it would be a good idea to wait for the _Glue crawler_ to finish during the deployment (`isCompleteHandler` that checks the crawler state). After trying it, I concluded it might not be the best idea.
+
+  - One of the reasons is the _cold start_ of the _Glue crawler_. It takes significant amount of time to start the crawler and even more time to wait for it to finish.
+
+  - The `startCrawler` API seems to be synchronous. It will return successfully if the crawler switches from "starting" to "running".
+
+  - All this waiting would significantly slow down the deployment pipeline.
+
+- Instead of using the `startCrawler` API to start the _Glue crawler_, one might use a _Glue trigger_.
+
+  - The _Glue trigger_ is an asynchronous API as opposed to `startCrawler` API (the `startCrawler` API waits for the crawler status to flip from "starting" to "running").
+
 - TODO: `arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole` in `Policies` tab in _IAM_.
 
   - WTF?

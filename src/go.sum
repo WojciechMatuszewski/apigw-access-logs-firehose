@@ -17,6 +17,8 @@ github.com/aws/aws-sdk-go-v2/internal/ini v1.3.5 h1:ixotxbfTCFpqbuwFv/RcZwyzhkxP
 github.com/aws/aws-sdk-go-v2/internal/ini v1.3.5/go.mod h1:R3sWUqPcfXSiF/LSFJhjyJmpg9uV6yP2yv3YZZjldVI=
 github.com/aws/aws-sdk-go-v2/service/apigateway v1.13.1 h1:8zYJoCKpoT9PcXSlArpuSEpO+vVaBcLM84jgS8+VSO8=
 github.com/aws/aws-sdk-go-v2/service/apigateway v1.13.1/go.mod h1:qrgJWLMCm9+xDHI2bZiOKcej0U/JHFSY2upPpBXdj3o=
+github.com/aws/aws-sdk-go-v2/service/glue v1.19.0 h1:YCzvfAe//2uKuJGOT+sBPPeW2aS0154x+ZuDLVfekPM=
+github.com/aws/aws-sdk-go-v2/service/glue v1.19.0/go.mod h1:13vCQC+Vk10mWzfYBy0w+ZCp86bEe6cBfGYl/K/8GE8=
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.7.0 h1:4QAOB3KrvI1ApJK14sliGr3Ie2pjyvNypn/lfzDHfUw=
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.7.0/go.mod h1:K/qPe6AP2TGYv4l6n7c88zh9jWBDf6nHhvg1fx/EWfU=
 github.com/aws/aws-sdk-go-v2/service/sso v1.9.0 h1:1qLJeQGBmNQW3mBNzK2CFmrQNmoXWrscPqsrAaU1aTA=

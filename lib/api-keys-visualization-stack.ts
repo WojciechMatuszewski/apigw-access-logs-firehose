@@ -240,11 +240,24 @@ export class ApiKeysVisualizationStack extends Stack {
       databaseName: glueDatabase.ref
     });
 
+    const crawlerStarterTrigger = new aws_glue.CfnTrigger(
+      this,
+      "CrawlerStarterTrigger",
+      {
+        type: "ON_DEMAND",
+        actions: [
+          {
+            crawlerName: glueCrawler.ref
+          }
+        ],
+        description: "Start the Glue Crawler"
+      }
+    );
+
     /**
      * To run the crawler when the stack is deployed.
      * Otherwise you would have to go to the console and run it manually.
      */
-
     const crawlerStarter = new aws_lambda_go.GoFunction(
       this,
       "CrawlerStarter",
@@ -252,23 +265,45 @@ export class ApiKeysVisualizationStack extends Stack {
         entry: join(__dirname, "../src/crawler-starter")
       }
     );
-
-    const crawlerStatusChecker = new aws_lambda_go.GoFunction(
-      this,
-      "CrawlerStatusChecker",
-      {
-        entry: join(__dirname, "../src/crawler-status-checker")
-      }
+    crawlerStarter.addToRolePolicy(
+      new aws_iam.PolicyStatement({
+        effect: aws_iam.Effect.ALLOW,
+        actions: ["glue:StartTrigger"],
+        resources: [
+          `arn:${Aws.PARTITION}:glue:${Aws.REGION}:${Aws.ACCOUNT_ID}:trigger/${crawlerStarterTrigger.ref}`
+        ]
+      })
     );
+
+    /**
+     * Waiting for the crawler to finish in the pipeline might not be the best DX.
+     * It takes a while for the crawler to start and it might take a while for the crawler to finish.
+     */
+
+    // const crawlerStatusCheckerTimeout = Duration.minutes(5);
+    // const crawlerStatusChecker = new aws_lambda_go.GoFunction(
+    //   this,
+    //   "CrawlerStatusChecker",
+    //   {
+    //     entry: join(__dirname, "../src/crawler-status-checker"),
+    //     timeout: crawlerStatusCheckerTimeout
+    //   }
+    // );
+    // crawlerStatusChecker.addToRolePolicy(
+    //   new aws_iam.PolicyStatement({
+    //     effect: aws_iam.Effect.ALLOW,
+    //     actions: ["glue:GetCrawler"],
+    //     resources: [
+    //       `arn:${Aws.PARTITION}:glue:${Aws.REGION}:${Aws.ACCOUNT_ID}:crawler/${glueCrawler.ref}`
+    //     ]
+    //   })
+    // );
 
     const crawlerStarterProvider = new custom_resources.Provider(
       this,
       "CrawlerStarterProvider",
       {
-        onEventHandler: crawlerStarter,
-        isCompleteHandler: crawlerStatusChecker,
-        queryInterval: Duration.seconds(15),
-        totalTimeout: Duration.minutes(5)
+        onEventHandler: crawlerStarter
       }
     );
 
@@ -279,7 +314,7 @@ export class ApiKeysVisualizationStack extends Stack {
         serviceToken: crawlerStarterProvider.serviceToken,
         resourceType: "Custom::CrawlerStarter",
         properties: {
-          crawlerName: glueCrawler.ref
+          TriggerName: crawlerStarterTrigger.ref
         }
       }
     );
