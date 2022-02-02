@@ -2,17 +2,15 @@
 
 Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amazon-api-gateway-usage-plans-using-amazon-quicksight/).
 
-**WORK IN PROGRESS**
-
 ## Learnings
 
 - Something changed between `aws-cdk: 2.0.0` and the `aws-cdk: 2.1.0`.
 
-  - For some reason I was unable to bootstrap my application without upgrading (used the default `npx cdk@2.0 init` command to setup the project).
+  - For some reason, I could not bootstrap my application without upgrading (used the default `npx cdk@2.0 init` command to set up the project).
 
-- No matter how many times I deploy the _API Gateway Mock Integration_ there is always something I forget.
+No matter how many times I deploy the _API Gateway Mock Integration_, I always forget something.
 
-  - Remember about the _Method Responses_ properties!
+- Remember about the _Method Responses_ properties!
 
 - _API Gateway_ (REST) can expose logs in two ways.
 
@@ -22,13 +20,13 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
   - The **execution logs** can be configured by specifying the **_Logging level_** property.
 
-  - You can learn more about [by reading this great article](https://seed.run/blog/whats-the-difference-between-access-logs-and-execution-logs-in-api-gateway.html).
+  - You can learn more about [by reading this fantastic article](https://seed.run/blog/whats-the-difference-between-access-logs-and-execution-logs-in-api-gateway.html).
 
-- _Kinesis Data Firehose_ allows you to specify the **prefix** (suffix is not configurable) under which the data will be saved (we are talking about _S3_ here).
+- _Kinesis Data Firehose_ allows you to specify the **prefix** (the suffix is not configurable) under which _Kinesis Data Firehose_ will save the data (we are talking about _S3_ here).
 
-- To **stream _API Gateway Access Logs_ to _Firehose_** the delivery stream **must have particular name scheme**.
+- To **stream _API Gateway Access Logs_ to _Firehose_**, the delivery stream **must have a particular name scheme**.
 
-  - The _API Gateway_ creates a service linked role in your account. That role contains permissions for the service to be able to push records to _Firehose_.
+  - The _API Gateway_ creates a service-linked role in your account. The role allows the service to push records to _Firehose_.
 
     ```json
     {
@@ -48,7 +46,7 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
 - The `autoDeleteObjects` on `aws_s3.Bucket` construct checks whether the `removalPolicy` is set to `DESTROY`, but the check **happens before the Aspects have a chance to run**.
 
-- It **used to be** a thing that you had to **append newline to each _Firehose_ JSON record**. Otherwise the records would be treated as a single record.
+- It **used to be** a thing that you had to **append a newline to each _Firehose_ JSON record**. Otherwise, the records would be treated as a single record.
 
   - You can specify the `AppendDelimiterToRecord` **processor** so that you do not have to do it!.
 
@@ -56,18 +54,19 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
   - The `@aws-cdk/aws-kinesisfirehose-alpha` package does not expose the _dynamic partitioning_ options.
 
-- By **using _dynamic partitioning_** you **loose the ability to use the build-in variables like `!{timestamp:XXX}` and others**.
+- By **using _dynamic partitioning_**, you **lose the ability to use the built-in variables like `!{timestamp:XXX}` and others**.
 
   - You have to provide them by yourself. You can either do that **within the processor Lambda** or **inline using `jq`**.
 
-  - Remember that **you pay additional fee for using the _dynamic partitioning_** feature.
+  - Remember that **you pay an additional fee for using the _dynamic partitioning_** feature.
 
-  - What is interesting that **the rule does not apply to `ErrorOutputPrefix` property**.
-    > You cannot use partitionKeyFromLambda and partitionKeyFromQuery namespaces when creating ErrorOutputPrefix expressions.
+  Interestingly, **the rule does not apply to `ErrorOutputPrefix` property**.
 
-- The **_dynamic partitioning_ feature is great!**, but I feel like using it only for the newline case is quite a big overhead.
+  > You cannot use partitionKeyFromLambda and partitionKeyFromQuery namespaces when creating ErrorOutputPrefix expressions.
 
-- If you want to use _API Gateway API Keys_ you **have to associate the API Key with an usage plan**.
+- The **_dynamic partitioning_ feature is excellent!**, but I feel like using it only for the newline case is quite a considerable overhead.
+
+- If you want to use _API Gateway API Keys_, you **have to associate the API Key with a usage plan**.
 
   - If you do not, the _API Gateway_ will reject the request.
 
@@ -87,13 +86,13 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
   - The only reliable way to resolve circular references is to **split resources that cause the circular reference**.
 
-- We went through all that _Firehose_ partitioning problems so that, when we query the data using _Athena_, the query is fast and cost efficient.
+- We went through all that _Firehose_ partitioning problems so that, when we query the data using _Athena_, the query is fast and cost-efficient.
 
   - If we did not, _Athena_ would be forced to scan **all of our objects in the bucket**. Not ideal.
 
-  - If you do not partition, you might also have problems with throttling on _S3_ level. [Refer to this documentation page](https://docs.aws.amazon.com/athena/latest/ug/partitions.html#partitions-considerations-limitations).
+  - If you do not partition, you might also have problems with throttling on the _S3_ level. [Refer to this documentation page](https://docs.aws.amazon.com/athena/latest/ug/partitions.html#partitions-considerations-limitations).
 
-    > If you issue queries against Amazon S3 buckets with a large number of objects and the data is not partitioned, such queries may affect the GET request rate limits in Amazon S3 and lead to Amazon S3 exceptions.
+    > If you issue queries against Amazon S3 buckets with many objects and the data is not partitioned, such queries may affect the GET request rate limits in Amazon S3 and lead to Amazon S3 exceptions.
 
 - _Athena_ needs a _table_ to run the queries. To **create a table, you can either do it manually via _Athena_ SDL, _Glue_ or using _Glue_ crawler**.
 
@@ -101,27 +100,27 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
 - The example for the [`AWS::Glue::Crawler` resource](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-glue-crawler.html) is not valid. The **`name` property on the `AWS::Glue::Database.DatabaseInput` cannot contain uppercase characters**.
 
-- Before you run any kind of _Athena_ queries, you have to set the location where _Athena_ will store the query output and metadata. [Documentation link](https://docs.aws.amazon.com/athena/latest/ug/querying.html).
+Before running any kind of _Athena_ queries, you have to set the location where _Athena_ will store the query output and metadata. [Documentation link](https://docs.aws.amazon.com/athena/latest/ug/querying.html).
 
-  - This setting is set **on the workgroup level**.
+- This setting is set **on the workgroup level**.
 
-  - Workgroup is **a way to control query access and costs**. [Documentation link](https://docs.aws.amazon.com/athena/latest/ug/manage-queries-control-costs-with-workgroups.html).
+- Workgroup is **a way to control query access and costs**. [Documentation link](https://docs.aws.amazon.com/athena/latest/ug/manage-queries-control-costs-with-workgroups.html).
 
-  - The "primary" (default) workgroup is already created for you. I could not find a way to update it via IaC. Had to create my own separate workgroup.
+- The "primary" (default) workgroup is already created for you. I could not find a way to update it via IaC. I had to create a separate workgroup.
 
-- It seems to me that _Athena_ uses some kind of [_service-linked role_](https://docs.aws.amazon.com/IAM/latest/UserGuide/using-service-linked-roles.html) to save the query results onto _S3_.
+- It seems that _Athena_ uses [_service-linked role_](https://docs.aws.amazon.com/IAM/latest/UserGuide/using-service-linked-roles.html) to save the query results onto _S3_.
 
 - The _custom resources_ framework that _AWS CDK_ exposes is great!
 
-  - The `isCompleteHandler` property and the whole concept of _waiters_ is very useful, especially for asynchronous jobs.
+  - The `isCompleteHandler` property and the whole concept of _waiters_ is advantageous, especially for asynchronous jobs.
 
-- Initially I though it would be a good idea to wait for the _Glue crawler_ to finish during the deployment (`isCompleteHandler` that checks the crawler state). After trying it, I concluded it might not be the best idea.
+Initially, I thought it would be good to wait for the _Glue crawler_ to finish during the deployment (`isCompleteHandler` that checks the crawler state). After trying it, I concluded it might not be the best idea.
 
-  - One of the reasons is the _cold start_ of the _Glue crawler_. It takes significant amount of time to start the crawler and even more time to wait for it to finish.
+- One of the reasons is the _cold start_ of the _Glue crawler_. It takes a significant amount of time to start the crawler and even more time to wait for it to finish.
 
-  - The `startCrawler` API seems to be synchronous. It will return successfully if the crawler switches from "starting" to "running".
+- The `startCrawler` API seems to be synchronous. If the crawler switches from "starting" to "running", it will respond successfully.
 
-  - All this waiting would significantly slow down the deployment pipeline.
+- All this waiting would significantly slow down the deployment pipeline.
 
 - Instead of using the `startCrawler` API to start the _Glue crawler_, one might use a _Glue trigger_.
 
@@ -131,5 +130,3 @@ Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amaz
 
   - WTF?
   - Is this policy related to service-linked roles?
-
-- TODO: Why do we need to partition the data. Is it for Glue or Athena?
