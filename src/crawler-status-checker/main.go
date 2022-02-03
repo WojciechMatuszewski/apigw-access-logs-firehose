@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/glue"
 	gluetypes "github.com/aws/aws-sdk-go-v2/service/glue/types"
-	"github.com/davecgh/go-spew/spew"
 )
 
 func main() {
@@ -23,8 +22,6 @@ type Output struct {
 }
 
 func handler(ctx context.Context, event cfn.Event) (Output, error) {
-	spew.Dump(event)
-
 	fmt.Println("Retrieving crawler name")
 
 	crawlerName, found := event.ResourceProperties["CrawlerName"].(string)

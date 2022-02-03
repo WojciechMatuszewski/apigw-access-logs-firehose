@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/glue"
-	"github.com/davecgh/go-spew/spew"
 )
 
 func main() {
@@ -18,7 +17,6 @@ func main() {
 }
 
 func handler(ctx context.Context, event cfn.Event) (physicalResourceID string, data map[string]interface{}, err error) {
-	spew.Dump(event)
 
 	if event.RequestType == cfn.RequestDelete {
 		fmt.Println("Delete event type, skipping")

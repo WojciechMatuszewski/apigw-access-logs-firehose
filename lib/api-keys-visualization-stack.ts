@@ -11,8 +11,6 @@ import {
   aws_s3,
   CustomResource,
   custom_resources,
-  Duration,
-  Lazy,
   RemovalPolicy,
   Stack,
   StackProps
@@ -343,7 +341,7 @@ export class ApiKeysVisualizationStack extends Stack {
     new aws_athena.CfnNamedQuery(this, "AthenaIaCQuery", {
       name: "apilogsquery",
       database: glueDatabase.ref,
-      queryString: `SELECT * from ${glueCrawler.ref} WHERE day=${currentDay}`,
+      queryString: `SELECT * from logs WHERE day=${currentDay}`,
       workGroup: athenaAPILogsWorkGroup.name
     });
   }

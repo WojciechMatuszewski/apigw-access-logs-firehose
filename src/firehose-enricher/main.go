@@ -33,8 +33,6 @@ func main() {
 }
 
 func handler(ctx context.Context, event events.KinesisFirehoseEvent) (events.KinesisFirehoseResponse, error) {
-	// spew.Dump(event)
-
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		panic(err)

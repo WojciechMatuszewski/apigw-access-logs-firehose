@@ -14,10 +14,6 @@ new ApiKeysVisualizationStack(app, "ApiKeysVisualizationStack", {
 
 class RemovalPolicyAll implements IAspect {
   public visit(node: IConstruct): void {
-    if (node instanceof cdk.aws_s3.CfnBucket) {
-      console.log("S# bucket");
-    }
-
     if (node instanceof cdk.CfnResource) {
       node.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
     }

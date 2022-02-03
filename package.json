@@ -10,7 +10,8 @@
     "test": "jest",
     "cdk": "cdk",
     "bootstrap": "npm run cdk bootstrap -- --qualifier=apikeys",
-    "deploy": "npm run cdk deploy -- --hotswap"
+    "deploy": "npm run cdk deploy -- --hotswap",
+    "destroy": "npm run cdk destroy"
   },
   "devDependencies": {
     "@aws-cdk/aws-kinesisfirehose-alpha": "2.10.0-alpha.0",

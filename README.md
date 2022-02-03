@@ -1,14 +1,27 @@
 # Visualizing API Gateway usage plans
 
-Inspired by [this article](https://aws.amazon.com/blogs/compute/visualizing-amazon-api-gateway-usage-plans-using-amazon-quicksight/).
+Implementation of [this article](https://aws.amazon.com/blogs/compute/visualizing-amazon-api-gateway-usage-plans-using-amazon-quicksight/) **minus the _Amazon QuickSight_ part**.
+
+## Deployment
+
+1. `npm run bootstrap`
+2. `npm run deploy`
+
+## Playing around
+
+1. Deploy the stack.
+
+2. Go to the _API Gateway_ console. Get the API key.
+
+3. Make a couple of requests to the endpoint.
+
+4. Run the _Glue_ crawler via trigger (_Glue_ console).
+
+5. Run the predefined _Athena_ query.
 
 ## Learnings
 
-- Something changed between `aws-cdk: 2.0.0` and the `aws-cdk: 2.1.0`.
-
-  - For some reason, I could not bootstrap my application without upgrading (used the default `npx cdk@2.0 init` command to set up the project).
-
-No matter how many times I deploy the _API Gateway Mock Integration_, I always forget something.
+No matter how often I deploy the _API Gateway Mock Integration_, I always forget something.
 
 - Remember about the _Method Responses_ properties!
 
@@ -46,7 +59,7 @@ No matter how many times I deploy the _API Gateway Mock Integration_, I always f
 
 - The `autoDeleteObjects` on `aws_s3.Bucket` construct checks whether the `removalPolicy` is set to `DESTROY`, but the check **happens before the Aspects have a chance to run**.
 
-- It **used to be** a thing that you had to **append a newline to each _Firehose_ JSON record**. Otherwise, the records would be treated as a single record.
+- It **used to be** a thing that you had to **append a newline to each _Firehose_ JSON record**. Otherwise, the service would treat a batch of records as a single record.
 
   - You can specify the `AppendDelimiterToRecord` **processor** so that you do not have to do it!.
 
@@ -60,21 +73,21 @@ No matter how many times I deploy the _API Gateway Mock Integration_, I always f
 
   - Remember that **you pay an additional fee for using the _dynamic partitioning_** feature.
 
-  Interestingly, **the rule does not apply to `ErrorOutputPrefix` property**.
+  Interestingly, **this rule does not apply to `ErrorOutputPrefix` property**.
 
   > You cannot use partitionKeyFromLambda and partitionKeyFromQuery namespaces when creating ErrorOutputPrefix expressions.
 
-- The **_dynamic partitioning_ feature is excellent!**, but I feel like using it only for the newline case is quite a considerable overhead.
+- The **_dynamic partitioning_ feature is excellent!**, but I suppose using it only for the newline case is quite a considerable overhead.
 
 - If you want to use _API Gateway API Keys_, you **have to associate the API Key with a usage plan**.
 
   - If you do not, the _API Gateway_ will reject the request.
 
-    > API Key ... not authorized because method 'GET /' requires API Key and API Key is not associated with a Usage Plan for API Stage zsuvlqr7nb/prod: No Usage Plan found for key and API Stage
+    > API Key ... not authorized because method 'GET /' requires API Key and API Key is not associated with a Usage Plan for API Stage zsuvlqxxx/prod: No Usage Plan found for key and API Stage
 
   - The **_usage plan_ has to be associated with API stage**. Otherwise, _API Gateway_ will reject the request (the same error as above).
 
-- The **access logs** are **produced before the execution logs**. Makes sense.
+- The **access logs** are **produced before the execution logs**.
 
 - _API Gateway_ has weird _IAM actions_ scheme.
 
@@ -90,7 +103,7 @@ No matter how many times I deploy the _API Gateway Mock Integration_, I always f
 
   - If we did not, _Athena_ would be forced to scan **all of our objects in the bucket**. Not ideal.
 
-  - If you do not partition, you might also have problems with throttling on the _S3_ level. [Refer to this documentation page](https://docs.aws.amazon.com/athena/latest/ug/partitions.html#partitions-considerations-limitations).
+  - If you do not use partitioning, you might also have problems with throttling on the _S3_ level. [Refer to this documentation page](https://docs.aws.amazon.com/athena/latest/ug/partitions.html#partitions-considerations-limitations).
 
     > If you issue queries against Amazon S3 buckets with many objects and the data is not partitioned, such queries may affect the GET request rate limits in Amazon S3 and lead to Amazon S3 exceptions.
 
@@ -100,19 +113,19 @@ No matter how many times I deploy the _API Gateway Mock Integration_, I always f
 
 - The example for the [`AWS::Glue::Crawler` resource](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-glue-crawler.html) is not valid. The **`name` property on the `AWS::Glue::Database.DatabaseInput` cannot contain uppercase characters**.
 
-Before running any kind of _Athena_ queries, you have to set the location where _Athena_ will store the query output and metadata. [Documentation link](https://docs.aws.amazon.com/athena/latest/ug/querying.html).
+Before running any _Athena_ queries, you have to set the location where _Athena_ will store the query output and metadata. [Documentation link](https://docs.aws.amazon.com/athena/latest/ug/querying.html).
 
 - This setting is set **on the workgroup level**.
 
 - Workgroup is **a way to control query access and costs**. [Documentation link](https://docs.aws.amazon.com/athena/latest/ug/manage-queries-control-costs-with-workgroups.html).
 
-- The "primary" (default) workgroup is already created for you. I could not find a way to update it via IaC. I had to create a separate workgroup.
+- The "primary" (default) workgroup is already created for you. I could not find a way to update it via IaC. I had to make a separate workgroup.
 
 - It seems that _Athena_ uses [_service-linked role_](https://docs.aws.amazon.com/IAM/latest/UserGuide/using-service-linked-roles.html) to save the query results onto _S3_.
 
 - The _custom resources_ framework that _AWS CDK_ exposes is great!
 
-  - The `isCompleteHandler` property and the whole concept of _waiters_ is advantageous, especially for asynchronous jobs.
+  - The `isCompleteHandler` property and the whole concept of _waiters_ is excellent, especially for asynchronous jobs.
 
 Initially, I thought it would be good to wait for the _Glue crawler_ to finish during the deployment (`isCompleteHandler` that checks the crawler state). After trying it, I concluded it might not be the best idea.
 
@@ -126,7 +139,10 @@ Initially, I thought it would be good to wait for the _Glue crawler_ to finish d
 
   - The _Glue trigger_ is an asynchronous API as opposed to `startCrawler` API (the `startCrawler` API waits for the crawler status to flip from "starting" to "running").
 
-- TODO: `arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole` in `Policies` tab in _IAM_.
+- Tough luck deleting `AWS::Athena::NamedQuery` resource attached to `AWS::Athena::WorkGroup`. It seems that _CloudFormation_ will not automatically delete the `NamedQuery` for you.
 
-  - WTF?
-  - Is this policy related to service-linked roles?
+- Despite adding `DeletionPolicy: Delete` on every resource, **_CloudWatch_ log groups implicitly created by _Lambda_ functions** will **not be deleted when the stack is deleted**.
+
+  - These log groups live "outside" of the _CloudFormation_ - **they were created "implicitly"**. Quite annoying if you ask me.
+
+  - [Link to an excellent short article](https://blog.rowanudell.com/cleaning-up-lambda-logs-with-cloudformation/) explaining this behavior.
